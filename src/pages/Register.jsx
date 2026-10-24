@@ -24,12 +24,18 @@ export default function Register() {
       toast.success('¡Cuenta creada! Bienvenido a Travel in Rio 🌴');
       navigate('/dashboard');
     } catch (err) {
-      const msg = err.code === 'auth/email-already-in-use'
-        ? 'Este correo ya está registrado'
-        : err.code === 'auth/weak-password'
-        ? 'La contraseña debe tener al menos 6 caracteres'
-        : 'Error al crear la cuenta';
-      toast.error(msg);
+      console.error("Error al registrar:", err);
+      let msg = 'Error al crear la cuenta';
+      if (err.code === 'auth/email-already-in-use') {
+        msg = 'Este correo ya está registrado';
+      } else if (err.code === 'auth/weak-password') {
+        msg = 'La contraseña debe tener al menos 6 caracteres';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg = 'Email/Contraseña no está habilitado en Firebase Authentication';
+      } else if (err.message) {
+        msg = `${err.code || 'Error'}: ${err.message}`;
+      }
+      toast.error(msg, { duration: 6000 });
     } finally {
       setLoading(false);
     }

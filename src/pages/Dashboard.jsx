@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/layout/Navbar';
 import {
   TrendingUp, DollarSign, Calendar, Award,
-  Phone, MapPin, CreditCard, Mail, Edit2, Check, X,
+  Phone, MapPin, CreditCard, Mail, Edit2, Check, X, Users, Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -22,15 +22,15 @@ const NIVEL_COLORS = {
 };
 
 const TYPE_BADGE = {
-  tour: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  transfer: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  paquete: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  tour: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+  transfer: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800',
+  paquete: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800',
 };
 
 export default function Dashboard() {
   const { currentUser, userProfile, setUserProfile } = useAuth();
   const [ventas, setVentas] = useState([]);
-  const [stats, setStats] = useState({ total: 0, ingresos: 0, meses: 0 });
+  const [stats, setStats] = useState({ totalVentas: 0, totalPax: 0, totalIngresos: 0, totalComisiones: 0 });
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [profileForm, setProfileForm] = useState({});
@@ -58,19 +58,23 @@ export default function Dashboard() {
         collection(db, 'ventas'),
         where('vendedorId', '==', currentUser.uid),
         orderBy('creadoEn', 'desc'),
-        limit(10),
+        limit(15),
       );
       const snap = await getDocs(q);
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setVentas(data);
 
-      // Stats
-      const totalMonto = data.reduce((acc, v) => acc + (v.monto || 0), 0);
-      const mesesUnicos = new Set(data.map((v) => {
-        const d = v.creadoEn?.toDate ? v.creadoEn.toDate() : new Date(v.creadoEn);
-        return `${d.getFullYear()}-${d.getMonth()}`;
-      })).size;
-      setStats({ total: data.length, ingresos: totalMonto, meses: mesesUnicos });
+      // Métricas de ventas y comisiones
+      const totalVentasMonto = data.reduce((acc, v) => acc + (v.monto || 0), 0);
+      const totalComisionesMonto = data.reduce((acc, v) => acc + (v.gananciaPromotor || (v.monto * 0.1) || 0), 0);
+      const totalPax = data.reduce((acc, v) => acc + (v.personas || 1), 0);
+
+      setStats({
+        totalVentas: data.length,
+        totalPax: totalPax,
+        totalIngresos: totalVentasMonto,
+        totalComisiones: totalComisionesMonto,
+      });
     } catch (err) {
       console.error(err);
       toast.error('Error al cargar datos');
@@ -84,7 +88,7 @@ export default function Dashboard() {
       await updateDoc(doc(db, 'users', currentUser.uid), profileForm);
       setUserProfile((prev) => ({ ...prev, ...profileForm }));
       setEditing(false);
-      toast.success('Perfil actualizado');
+      toast.success('Perfil de pago actualizado');
     } catch {
       toast.error('Error al guardar perfil');
     }
@@ -96,104 +100,164 @@ export default function Dashboard() {
     return format(d, 'dd MMM yyyy', { locale: es });
   };
 
-  const nivel = userProfile?.nivel || 'Básico';
+  const nivel = userProfile?.nivel || 'Equipo Comercial';
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-16">
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-800 dark:text-white">Resumen general</h1>
+          <span className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest bg-sky-100 dark:bg-sky-900/40 px-3 py-1 rounded-full">
+            Panel de Desempeño
+          </span>
+          <h1 className="text-3xl font-extrabold text-slate-800 dark:text-white mt-2">Resumen General</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
-            Ve un panorama completo de tu desempeño, ventas y gestión comercial.
+            Revisa tus tours vendidos, comisiones ganadas y actualiza tus datos bancarios para liquidación.
           </p>
         </div>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'Ventas', value: stats.total, icon: TrendingUp, color: 'text-sky-500' },
-            { label: 'Ingresos', value: `R$ ${stats.ingresos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' },
-            { label: 'Meses', value: stats.meses, icon: Calendar, color: 'text-orange-500' },
-            { label: 'Nivel', value: nivel, icon: Award, color: NIVEL_COLORS[nivel] },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="card">
-              <p className="label">{label}</p>
-              <p className={`text-2xl font-extrabold mt-1 ${color}`}>{value}</p>
-              <Icon size={18} className={`${color} mt-2 opacity-60`} />
+          <div className="card border-l-4 border-l-sky-500">
+            <p className="label">Ventas Registradas</p>
+            <p className="text-3xl font-extrabold text-slate-800 dark:text-white mt-1">{stats.totalVentas}</p>
+            <div className="flex items-center gap-1 text-xs text-sky-600 mt-2 font-medium">
+              <TrendingUp size={14} /> Total órdenes
             </div>
-          ))}
+          </div>
+
+          <div className="card border-l-4 border-l-emerald-500">
+            <p className="label">Tus Comisiones (Ganancia)</p>
+            <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+              R$ {stats.totalComisiones.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            <div className="flex items-center gap-1 text-xs text-emerald-600 mt-2 font-medium">
+              <Sparkles size={14} /> Tu pago acumulado
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-l-indigo-500">
+            <p className="label">Total Facturado</p>
+            <p className="text-2xl font-bold text-slate-700 dark:text-slate-200 mt-1">
+              R$ {stats.totalIngresos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            <div className="flex items-center gap-1 text-xs text-indigo-500 mt-2 font-medium">
+              <DollarSign size={14} /> Ventas a clientes
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-l-amber-500">
+            <p className="label">Pasajeros (PAX)</p>
+            <p className="text-3xl font-extrabold text-amber-500 mt-1">{stats.totalPax}</p>
+            <div className="flex items-center gap-1 text-xs text-amber-600 mt-2 font-medium">
+              <Users size={14} /> Total turistas atendidos
+            </div>
+          </div>
         </div>
 
-        {/* Profile Section */}
+        {/* Perfil & Datos de Pago */}
         <div className="card mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 dark:border-slate-700">
             <div>
-              <p className="text-xs font-bold text-sky-500 uppercase tracking-widest mb-1">Perfil</p>
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Datos de pago y contacto</h2>
+              <p className="text-xs font-bold text-sky-500 uppercase tracking-widest">Liquidaciones</p>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Datos de Pago y Contacto</h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div>
               {editing ? (
-                <>
-                  <button onClick={handleSaveProfile} className="btn-primary flex items-center gap-1 text-sm py-2 px-4">
+                <div className="flex items-center gap-2">
+                  <button onClick={handleSaveProfile} className="btn-primary flex items-center gap-1 text-xs py-2 px-3">
                     <Check size={14} /> Guardar
                   </button>
-                  <button onClick={() => setEditing(false)} className="btn-secondary flex items-center gap-1 text-sm py-2 px-4">
+                  <button onClick={() => setEditing(false)} className="btn-secondary flex items-center gap-1 text-xs py-2 px-3">
                     <X size={14} /> Cancelar
                   </button>
-                </>
+                </div>
               ) : (
-                <button onClick={() => setEditing(true)} className="btn-secondary flex items-center gap-1 text-sm py-2 px-4">
-                  <Edit2 size={14} /> Editar perfil
+                <button onClick={() => setEditing(true)} className="btn-secondary flex items-center gap-1 text-xs py-2 px-3">
+                  <Edit2 size={14} /> Editar cuenta bancaria
                 </button>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { icon: Phone, label: 'Teléfono de contacto', key: 'telefono', placeholder: '+55 21 99999-9999' },
-              { icon: MapPin, label: 'Banco', key: 'banco', placeholder: 'Ej: Nubank, Itaú...' },
-              { icon: CreditCard, label: 'Tipo de cuenta', key: 'tipoCuenta', placeholder: 'Corriente, Ahorro...' },
-              { icon: CreditCard, label: 'Número de cuenta', key: 'numeroCuenta', placeholder: '00000-0' },
-              { icon: Mail, label: 'Correo', value: currentUser?.email, readOnly: true },
-            ].map(({ icon: Icon, label, key, placeholder, value, readOnly }) => (
-              <div key={label} className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon size={14} className="text-slate-400" />
-                  <span className="label mb-0">{label}</span>
-                </div>
-                {editing && !readOnly ? (
-                  <input
-                    className="input-field mt-1 text-sm"
-                    value={profileForm[key] || ''}
-                    onChange={(e) => setProfileForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                    placeholder={placeholder}
-                  />
-                ) : (
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mt-1">
-                    {readOnly ? value : (userProfile?.[key] || '—')}
-                  </p>
-                )}
-              </div>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+              <span className="label">Teléfono / WhatsApp</span>
+              {editing ? (
+                <input
+                  className="input-field mt-1 text-sm"
+                  value={profileForm.telefono || ''}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, telefono: e.target.value }))}
+                  placeholder="+56 9..."
+                />
+              ) : (
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1">{userProfile?.telefono || 'Sin configurar'}</p>
+              )}
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+              <span className="label">Banco (PIX o Transferencia)</span>
+              {editing ? (
+                <input
+                  className="input-field mt-1 text-sm"
+                  value={profileForm.banco || ''}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, banco: e.target.value }))}
+                  placeholder="Ej: Banco Estado, Nubank, Itaú..."
+                />
+              ) : (
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1">{userProfile?.banco || 'Sin configurar'}</p>
+              )}
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+              <span className="label">Tipo de Cuenta / Llave PIX</span>
+              {editing ? (
+                <input
+                  className="input-field mt-1 text-sm"
+                  value={profileForm.tipoCuenta || ''}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, tipoCuenta: e.target.value }))}
+                  placeholder="Cuenta RUT, Corriente, Llave PIX..."
+                />
+              ) : (
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1">{userProfile?.tipoCuenta || 'Sin configurar'}</p>
+              )}
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+              <span className="label">Número de Cuenta / RUT</span>
+              {editing ? (
+                <input
+                  className="input-field mt-1 text-sm"
+                  value={profileForm.numeroCuenta || ''}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, numeroCuenta: e.target.value }))}
+                  placeholder="Número de cuenta o RUT"
+                />
+              ) : (
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1">{userProfile?.numeroCuenta || 'Sin configurar'}</p>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Recent Sales */}
+        {/* Tabla de Últimas Ventas */}
         <div className="card">
-          <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">
-            Últimas ventas registradas
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+              Últimas Ventas Registradas
+            </h2>
+            <span className="text-xs text-slate-400">Mostrando las {ventas.length} más recientes</span>
+          </div>
+
           {loading ? (
             <div className="flex justify-center py-10">
               <span className="w-8 h-8 border-4 border-sky-400 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : ventas.length === 0 ? (
-            <div className="text-center py-10 text-slate-400">
-              <p className="text-4xl mb-3">🌊</p>
-              <p>Aún no tienes ventas registradas.</p>
+            <div className="text-center py-12 text-slate-400">
+              <p className="text-4xl mb-3">🏖️</p>
+              <p className="font-medium text-slate-600 dark:text-slate-300">Aún no tienes ventas registradas</p>
+              <p className="text-xs mt-1">Ingresa a "Registrar Venta" para cargar tu primera venta del catálogo.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -201,26 +265,36 @@ export default function Dashboard() {
                 <thead>
                   <tr className="text-left text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
                     <th className="pb-3 font-semibold">Cliente</th>
-                    <th className="pb-3 font-semibold">Tipo</th>
-                    <th className="pb-3 font-semibold">Servicio</th>
-                    <th className="pb-3 font-semibold">Monto</th>
+                    <th className="pb-3 font-semibold">Servicio / Tour</th>
+                    <th className="pb-3 font-semibold text-center">PAX</th>
+                    <th className="pb-3 font-semibold">Venta Total</th>
+                    <th className="pb-3 font-semibold text-emerald-600">Comisión Vendedor</th>
                     <th className="pb-3 font-semibold">Fecha</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {ventas.map((v) => (
-                    <tr key={v.id} className="border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 font-medium text-slate-800 dark:text-white">{v.cliente?.nombre || '—'}</td>
-                      <td className="py-3">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${TYPE_BADGE[v.tipo] || 'bg-slate-100 text-slate-600'}`}>
-                          {v.tipo}
-                        </span>
+                    <tr key={v.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="py-3.5">
+                        <p className="font-semibold text-slate-800 dark:text-white">{v.cliente?.nombre || '—'}</p>
+                        <p className="text-xs text-slate-400">{v.cliente?.telefono || ''}</p>
                       </td>
-                      <td className="py-3 text-slate-600 dark:text-slate-300">{v.servicio || '—'}</td>
-                      <td className="py-3 font-bold text-green-600 dark:text-green-400">
+                      <td className="py-3.5">
+                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-1 ${TYPE_BADGE[v.tipo] || 'bg-slate-100'}`}>
+                          {v.tipo === 'tour' ? 'Tour' : v.tipo === 'transfer' ? 'Traslado' : 'Paquete'}
+                        </span>
+                        <p className="font-medium text-slate-700 dark:text-slate-200">{v.servicio || '—'}</p>
+                      </td>
+                      <td className="py-3.5 text-center font-bold text-slate-700 dark:text-slate-300">
+                        {v.personas || 1}
+                      </td>
+                      <td className="py-3.5 font-bold text-slate-800 dark:text-slate-100">
                         R$ {(v.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3 text-slate-500">{formatDate(v.creadoEn)}</td>
+                      <td className="py-3.5 font-bold text-emerald-600 dark:text-emerald-400">
+                        + R$ {(v.gananciaPromotor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3.5 text-slate-500 text-xs">{formatDate(v.creadoEn)}</td>
                     </tr>
                   ))}
                 </tbody>
