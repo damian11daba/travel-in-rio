@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Sales from './pages/Sales';
 import History from './pages/History';
+import Admin from './pages/Admin';
 import PrivateRoute from './components/layout/PrivateRoute';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/ventas" element={<Sales />} />
         <Route path="/historial" element={<History />} />
+        <Route path="/admin" element={<Admin />} />
       </Route>
 
       {/* Fallback */}
